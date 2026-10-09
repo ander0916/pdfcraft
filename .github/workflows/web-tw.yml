@@ -1,0 +1,52 @@
+name: Web TW (wasm, fork-only)
+
+# Fork-only fast lane: builds just the web bundle (with the Taiwan i18n patch
+# and browser-locale detection) without the signing/platform matrix of
+# release.yml. Dispatch on the tw-i18n branch, then download the
+# `release-web-tw` artifact.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  web:
+    name: Web (wasm)
+    runs-on: ubuntu-latest
+    env:
+      TRUNK_VERSION: 0.21.14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out craft-fonts
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: storytold/craft-fonts
+          ref: abb83316d96aa59c1cf64784289e378fe9fa5695
+          path: craft-fonts
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: web-tw
+      - name: Install trunk
+        run: |
+          curl -fsSL "https://github.com/trunk-rs/trunk/releases/download/v${TRUNK_VERSION}/trunk-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar -xz -C "$HOME/.cargo/bin" trunk
+          trunk --version
+      - name: Build and zip
+        env:
+          CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+          CRAFT_FONTS_REQUIRED: "1"
+        run: packaging/web/package.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-web-tw
+          path: dist/release/*
+          if-no-files-found: error
