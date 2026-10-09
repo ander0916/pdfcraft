@@ -243,7 +243,41 @@ fn first_supported(list: &str) -> Option<Lang> {
 
 #[cfg(target_arch = "wasm32")]
 fn detect_system_lang() -> Lang {
-    Lang::EN
+    // Web: `?lang=` (or `?language=`) wins, so an embed can pick a language;
+    // otherwise follow the browser's preferred languages; English if unknown.
+    if let Some(lang) = web_url_lang().as_deref().and_then(lang_from_tag) {
+        return lang;
+    }
+    web_browser_langs().into_iter().find_map(|t| lang_from_tag(&t)).unwrap_or(Lang::EN)
+}
+
+/// `?lang=` / `?language=` from the page URL (works on the iframe `src` too).
+#[cfg(target_arch = "wasm32")]
+fn web_url_lang() -> Option<String> {
+    let search = web_sys::window()?.location().search().ok()?;
+    let params = web_sys::UrlSearchParams::new_with_str(&search).ok()?;
+    params.get("lang").or_else(|| params.get("language"))
+}
+
+/// The browser's preferred languages, most preferred first.
+#[cfg(target_arch = "wasm32")]
+fn web_browser_langs() -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(window) = web_sys::window() {
+        let navigator = window.navigator();
+        if let Some(primary) = navigator.language() {
+            out.push(primary);
+        }
+        let list = navigator.languages();
+        for i in 0..list.length() {
+            if let Some(tag) = list.get(i).as_string() {
+                if !out.contains(&tag) {
+                    out.push(tag);
+                }
+            }
+        }
+    }
+    out
 }
 
 thread_local! {
